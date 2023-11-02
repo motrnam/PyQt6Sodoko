@@ -4,9 +4,9 @@ from Sudoku.Generator import *
 
 # setting difficulties and their cutoffs for each solve method
 difficulties = {
-    'easy': (35, 0), 
-    'medium': (81, 5), 
-    'hard': (81, 10), 
+    'easy': (35, 0),
+    'medium': (81, 5),
+    'hard': (81, 10),
     'extreme': (81, 15)
 }
 

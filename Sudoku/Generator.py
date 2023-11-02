@@ -1,8 +1,8 @@
 import random
 from functools import reduce
 
-from Sudoku.Board import *
-from Sudoku.Solver import *
+from Board import *
+from Solver import *
 
 
 class Generator:
@@ -14,7 +14,8 @@ class Generator:
         f = open(starting_file)
 
         # reducing file to a list of numbers
-        numbers = filter(lambda x: x in '123456789', list(reduce(lambda x, y: x + y, f.readlines())))
+        numbers = filter(lambda x: x in '123456789', list(
+            reduce(lambda x, y: x + y, f.readlines())))
         numbers = list(map(int, numbers))
 
         # closing file
@@ -54,7 +55,8 @@ class Generator:
                 elif case == 3:
                     self.board.swap_band(piece1, piece2)
         else:
-            raise Exception('Rearranging partial board may compromise uniqueness.')
+            raise Exception(
+                'Rearranging partial board may compromise uniqueness.')
 
     # method gets all possible values for a particular cell, if there is only one
     # then we can remove that cell
@@ -75,7 +77,8 @@ class Generator:
 
         # sorting used cells by density heuristic, highest to lowest
         new_set = [(x, self.board.get_density(x)) for x in existing]
-        elements = [x[0] for x in sorted(new_set, key=lambda x: x[1], reverse=True)]
+        elements = [x[0]
+                    for x in sorted(new_set, key=lambda x: x[1], reverse=True)]
 
         # for each cell in sorted list
         for cell in elements:

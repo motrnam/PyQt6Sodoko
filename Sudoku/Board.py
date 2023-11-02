@@ -1,4 +1,4 @@
-from Sudoku.Cell import Cell
+from Cell import Cell
 
 
 class Board:
@@ -55,21 +55,25 @@ class Board:
     # returning all possible values that could be assigned to the
     # cell provided as argument
     def get_possibles(self, cell):
-        possibilities = self.rows[cell.row] + self.columns[cell.col] + self.boxes[cell.box]
-        excluded = set([x.value for x in possibilities if x.value != 0 and x.value != cell.value])
+        possibilities = self.rows[cell.row] + \
+            self.columns[cell.col] + self.boxes[cell.box]
+        excluded = set(
+            [x.value for x in possibilities if x.value != 0 and x.value != cell.value])
         results = [x for x in range(1, 10) if x not in excluded]
         return results
 
     # calculates the density of a specific cell's context
     def get_density(self, cell):
-        possibilities = self.rows[cell.row] + self.columns[cell.col] + self.boxes[cell.box]
+        possibilities = self.rows[cell.row] + \
+            self.columns[cell.col] + self.boxes[cell.box]
         if cell.value != 0:
             possibilities.remove(cell)
         return len([x for x in set(possibilities) if x.value != 0]) / 20.0
 
     # gets complement of possibles, values that cell cannot be
     def get_excluded(self, cell):
-        possibilities = self.rows[cell.row] + self.columns[cell.col] + self.boxes[cell.box]
+        possibilities = self.rows[cell.row] + \
+            self.columns[cell.col] + self.boxes[cell.box]
         return set([x.value for x in possibilities if x.value != 0 and x.value != cell.value])
 
     # swaps two rows
