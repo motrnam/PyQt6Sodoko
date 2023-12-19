@@ -44,6 +44,16 @@ class Board:
                 self.boxes[box].append(cell)
                 self.cells.append(cell)
 
+    def define_table_using_saved_file(self, table_in_string: str):
+        counter = 0
+        for my_char in table_in_string:
+            if my_char.isdigit():
+                self.rows[counter // 9][counter % 9].value = int(my_char)
+                counter += 1
+            else:
+                raise Exception('Invalid file')
+
+
     # returning cells in puzzle that are not set to zero
     def get_used_cells(self):
         return [x for x in self.cells if x.value != 0]
@@ -56,7 +66,7 @@ class Board:
     # cell provided as argument
     def get_possibles(self, cell):
         possibilities = self.rows[cell.row] + \
-            self.columns[cell.col] + self.boxes[cell.box]
+                        self.columns[cell.col] + self.boxes[cell.box]
         excluded = set(
             [x.value for x in possibilities if x.value != 0 and x.value != cell.value])
         results = [x for x in range(1, 10) if x not in excluded]
@@ -65,7 +75,7 @@ class Board:
     # calculates the density of a specific cell's context
     def get_density(self, cell):
         possibilities = self.rows[cell.row] + \
-            self.columns[cell.col] + self.boxes[cell.box]
+                        self.columns[cell.col] + self.boxes[cell.box]
         if cell.value != 0:
             possibilities.remove(cell)
         return len([x for x in set(possibilities) if x.value != 0]) / 20.0
@@ -73,7 +83,7 @@ class Board:
     # gets complement of possibles, values that cell cannot be
     def get_excluded(self, cell):
         possibilities = self.rows[cell.row] + \
-            self.columns[cell.col] + self.boxes[cell.box]
+                        self.columns[cell.col] + self.boxes[cell.box]
         return set([x.value for x in possibilities if x.value != 0 and x.value != cell.value])
 
     # swaps two rows

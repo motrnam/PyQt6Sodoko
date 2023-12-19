@@ -2,14 +2,17 @@ import sys
 
 import numpy as np
 from PyQt6 import QtWidgets
-from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QFont, QAction
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QFont, QAction, QCursor
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QWidget, \
-    QGridLayout
-
+    QGridLayout, QVBoxLayout, QToolTip, QHBoxLayout
+from pathlib import Path
 from Generator import Generator
 
-INIT_SIZE_TILE = 40
+INIT_SIZE_TILE = 60
+NUMBER = 9
+FIRST_WINDOW_SIZE = 700
+BOTTOM_NUMBER_SIZE = 45
 difficulties = {
     'easy': (35, 0),
     'medium': (81, 5),
@@ -20,6 +23,7 @@ difficulties = {
 
 class Game:
     def __init__(self, level: str):
+        self.level = level
         self.difficulty = difficulties[level]
         self.gen = Generator("../base.txt")
         self.gen.randomize(100)
@@ -30,10 +34,10 @@ class Game:
         if self.difficulty[1] != 0:
             self.gen.reduce_via_logical(self.difficulty[1])
         self.final_table = self.gen.board.copy()
-        self.first_having_number = np.zeros((self.size_of_table, self.size_of_table))
+        self.first_having_number = np.zeros((self.size_of_table, self.size_of_table), dtype='int32')
         for i in range(self.size_of_table):
             for j in range(self.size_of_table):
-                if self.final_table.rows[i][j] != 0:
+                if self.final_table.rows[i][j].value != 0:
                     self.first_having_number[i][j] = 1
 
     def is_solve(self) -> bool:
@@ -69,11 +73,14 @@ class Game:
 class MyWindows(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
+        self.game = None
         self.setWindowTitle("Sudoku")
-        self.setFixedSize(500, 500)
+        self.setMinimumSize(FIRST_WINDOW_SIZE, FIRST_WINDOW_SIZE)
         self.init_topBar()
         self.initUI()
         self.init_board()
+        self.init_game()
+        self.add_number_buttons()
         self.show()
 
     def init_topBar(self):
@@ -117,73 +124,168 @@ class MyWindows(QtWidgets.QMainWindow):
         self.timer_label.setText(f'Timer: {current_time}')
 
     def new_game(self, level: str):
-        print(level)
-        self.game = Game('easy')
+        self.game = Game(level)
+        self.change_board()
         # self.initUI()
 
     def initUI(self):
         # self.add_timer()
         ...
 
+    def init_game(self):
+        my_file = Path("save.txt")
+        if my_file.exists() and my_file.is_file():
+            self.my_load()
+        else:
+            self.game = Game('easy')
+        self.change_board()
+
+    def add_number_buttons(self):
+        self.bottom_numbers = [[None] * 9 for _ in range(9)]
+        self.my_layout = QHBoxLayout()
+        for i in range(NUMBER):
+            btn = QPushButton(str(i + 1))
+            btn.setFixedSize(BOTTOM_NUMBER_SIZE, BOTTOM_NUMBER_SIZE)
+            btn.clicked.connect(lambda _, a=i: self.bottom_button_clicked(a + 1))
+            self.my_layout.addWidget(btn)
+            btn.setStyleSheet("""
+                QPushButton {
+                background-color: #007bff;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #0069d9;
+            }
+            """)
+            self.bottom_numbers[i] = btn
+        self.my_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.the_widget = QWidget(self)
+        self.the_widget.setFixedSize(NUMBER * (BOTTOM_NUMBER_SIZE + 5), (BOTTOM_NUMBER_SIZE + 10))
+        self.the_widget.setLayout(self.my_layout)
+        self.the_widget.move((self.width() - self.the_widget.width()) // 2,
+                             self.height() - self.the_widget.height() - 20)
+        self.the_widget.show()
+
+    def bottom_button_clicked(self, number: int):
+        print(number)
+
     def init_board(self):
         layout = QGridLayout()
-        self.all_button = list()
-        for i in range(9):
-            for j in range(9):
-                button = QPushButton('1')
-                button.setFixedSize(INIT_SIZE_TILE, INIT_SIZE_TILE)  # Set the fixed size of the button
-                self.all_button.append(button)
-                layout.addWidget(button, i, j)
-                button.clicked.connect(lambda _, a=i, b=j: self.click_button(a, b))
-                button.setStyleSheet(
-                    'QPushButton {'
-                    '    background-color: #E0E0E0;'
-                    '    border: 1px solid #909090;'
-                    '    border-radius: 5px;'
-                    '}'
-                    'QPushButton:hover {'
-                    '    background-color: #C0C0C0;'
-                    '}'
-                )
+        self.buttons = [[None] * 9 for _ in range(9)]
+        # for i in range(9):
+        #     for j in range(9):
+        #         button = QPushButton('1')
+        #         button.setFixedSize(INIT_SIZE_TILE, INIT_SIZE_TILE)  # Set the fixed size of the button
+        #         self.buttons[i][j] = button
+        #         layout.addWidget(button, i, j)
+        #         button.clicked.connect(lambda _, a=i, b=j: self.click_button(a, b))
+        #         button.setStyleSheet(
+        #             'QPushButton {'
+        #             '    background-color: #E0E0E0;'
+        #             '    border: 1px solid #909090;'
+        #             '    border-radius: 3px;'
+        #             '    color: #404041;'
+        #             '}'
+        #             'text-align: center;'
+        #             'QPushButton:hover {'
+        #             '    background-color: #C0C0C0;'
+        #             '}'
+        #         )
 
+        for i in range(3):
+            for j in range(3):
+                mimi_container = QGridLayout()
+                mini_widget = QWidget(self)
+                for k in range(3):
+                    for z in range(3):
+                        button = QPushButton('1')
+                        button.setFixedSize(INIT_SIZE_TILE, INIT_SIZE_TILE)  # Set the fixed size of the button
+                        button.clicked.connect(lambda _, a=i * 3 + k, b=3 * j + z: self.click_button(a, b))
+                        button.setStyleSheet(
+                            'QPushButton {'
+                            '    background-color: #E0E0E0;'
+                            '    border: 1px solid #909090;'
+                            '    border-radius: 3px;'
+                            '    color: #404041;'
+                            '   padding: 0px'
+                            '}'
+                            'text-align: center;'
+                            'QPushButton:hover {'
+                            '    background-color: #C0C0C0;'
+                            '}'
+                        )
+                        self.buttons[i * 3 + k][3 * j + z] = button
+                        mimi_container.addWidget(button, k, z)
+                mini_widget.setLayout(mimi_container)
+                mini_widget.setStyleSheet('#mini_widget {border: 2px solid black}')
+                mini_widget.setFixedSize(3 * INIT_SIZE_TILE + 3, 3 * INIT_SIZE_TILE + 3)
+                layout.addWidget(mini_widget, i, j)
         container = QWidget(self)
-        container.setFixedSize(9 * INIT_SIZE_TILE, 9 * INIT_SIZE_TILE)
+        container.setMinimumSize(9 * INIT_SIZE_TILE + 4, 9 * INIT_SIZE_TILE + 4)
         container.move((self.width() - container.width()) // 2, (self.height() - container.height()) // 2)
         container.setLayout(layout)
+        container.setStyleSheet('#container {border: 1px solid black}')
         container.show()
 
     def change_board(self):
-        ...
+        for i in range(NUMBER):
+            for j in range(NUMBER):
+                if str(self.game.final_table.rows[i][j])[7] != '0':
+                    self.buttons[i][j].setText(str(self.game.final_table.rows[i][j])[7])
+                else:
+                    self.buttons[i][j].setText('')
 
     def click_button(self, a: int, b: int):
         print(f'click {a} {b}')
+        if self.game.first_having_number[a][b] == 0:
+            # self.show_number_buttons()
+            print("test")
 
     def my_save(self):
         print("save")
         table = self.game.final_table
         result = ""
         temp = ""
+        solved = ""
         for i in range(9):
             for j in range(9):
-                result += str(table[i][j])
+                result += str((table.rows[i][j].value))
                 temp += str(self.game.first_having_number[i][j])
+                solved += str(self.game.solved.rows[i][j].value)
         result += '\n'
         result += temp
         result += '\n'
-        result += self.game.time
+        result += str(self.game.time)
+        result += '\n'
+        result += self.game.level
+        result += '\n'
+        result += solved
         with open("save.txt", "w") as f:
             f.write(result)
 
     def my_load(self):  # not tested
-        with open("save.txt", "r") as f:
-            table = f.readline()
-            time = f.readline()
-        table = table.split('\n')[0]
-        time = time.split('\n')[0]
-        table = [int(x) for x in table]
-        self.game.final_table = table
-        self.game.time = time
-        self.change_board()
+        try:
+            with open("save.txt", "r") as f:
+                table = f.readline().strip('\n')
+                initial_zero = f.readline().strip('\n')
+                time = f.readline().strip('\n')
+                level = f.readline().strip('\n')
+                solved = f.readline().strip('\n')
+            self.game = Game(level.strip('\n'))
+            self.game.time = int(time)
+            self.game.first_having_number = np.zeros((NUMBER, NUMBER), dtype='int32')
+            for i in range(NUMBER):
+                for j in range(NUMBER):
+                    self.game.final_table.rows[i][j].value = int(table[i * NUMBER + j])
+                    self.game.first_having_number[i][j] = int(initial_zero[i * NUMBER + j])
+                    self.game.solved.rows[i][j].value = int(solved[i * NUMBER + j])
+
+        except:
+            raise Exception('Error in loading file')  # to do instead of this make random table
 
 
 if __name__ == '__main__':
