@@ -5,7 +5,7 @@ from PyQt6 import QtWidgets
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QAction, QCursor
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QWidget, \
-    QGridLayout, QVBoxLayout, QToolTip, QHBoxLayout
+    QGridLayout, QVBoxLayout, QToolTip, QHBoxLayout, QMessageBox
 from pathlib import Path
 from Generator import Generator
 
@@ -13,6 +13,43 @@ INIT_SIZE_TILE = 60
 NUMBER = 9
 FIRST_WINDOW_SIZE = 700
 BOTTOM_NUMBER_SIZE = 45
+NORMAL_BUTTON_STYLE = """
+                QPushButton {
+                background-color: #eaebff;
+                color: black;
+                padding: 10px 10px;
+                border: 1px solid black;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background-color: #0069d9;
+            }
+            """
+HIGHLIGHT_BUTTON_STYLE = """ 
+        QPushButton {
+                background-color: #ffcc77;
+                color: black;
+                padding: 10px 20px;
+                border: 1px solid black;
+                text-align: center;
+            }
+            QPushButton:hover { 
+                background-color: #ffcc00;
+            }
+            """
+
+SELECTED_BUTTON_STYLE = """
+        QPushButton {
+                background-color: #999999;
+                color: black;
+                padding: 10px 20px;
+                border: 1px solid black;
+                text-align: center;
+            }
+            QPushButton:hover { 
+                background-color: #ffcc00;
+            }
+            """
 difficulties = {
     'easy': (35, 0),
     'medium': (81, 5),
@@ -69,10 +106,18 @@ class Game:
                     return False
         return True
 
+    def check_complete(self):
+        for i in range(self.size_of_table):
+            for j in range(self.size_of_table):
+                if self.final_table.rows[i][j] == 0:
+                    return False
+        return True
+
 
 class MyWindows(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
+        self.the_widget = None
         self.game = None
         self.setWindowTitle("Sudoku")
         self.setMinimumSize(FIRST_WINDOW_SIZE, FIRST_WINDOW_SIZE)
@@ -82,6 +127,8 @@ class MyWindows(QtWidgets.QMainWindow):
         self.init_game()
         self.add_number_buttons()
         self.show()
+        self.selected_x = -1
+        self.selected_y = -1
 
     def init_topBar(self):
         self.timer_label = QLabel('Timer: 0', self)
@@ -92,25 +139,32 @@ class MyWindows(QtWidgets.QMainWindow):
         exit_action.setShortcut('Ctrl+Q')
         save_action = QAction('Save', self)
         save_action.setShortcut('Ctrl+S')
+        setting_action = QAction('setting')
+        setting_action.setShortcut('Ctrl+D')
         save_action.triggered.connect(self.my_save)
         exit_action.triggered.connect(self.close)
         easy = QAction('easy', self)
         medium = QAction('medium', self)
         hard = QAction('hard', self)
         extreme = QAction('extreme', self)
+        about = QAction('about', self)
         self.my_menubar = self.menuBar()
         self.file_menu = self.my_menubar.addMenu('File')
         self.new_game_menu = self.my_menubar.addMenu('New')
+        self.about = self.my_menubar.addMenu('About')
         self.file_menu.addAction(exit_action)
         self.file_menu.addAction(save_action)
+        self.file_menu.addAction(setting_action)
         easy.triggered.connect(lambda: self.new_game('easy'))
         medium.triggered.connect(lambda: self.new_game('medium'))
         hard.triggered.connect(lambda: self.new_game('hard'))
         extreme.triggered.connect(lambda: self.new_game('extreme'))
+        about.triggered.connect(self.about_clicked)
         self.new_game_menu.addAction(easy)
         self.new_game_menu.addAction(medium)
         self.new_game_menu.addAction(hard)
         self.new_game_menu.addAction(extreme)
+        self.about.addAction(about)
 
     def add_timer(self):
         self.timer = QTimer()
@@ -148,19 +202,7 @@ class MyWindows(QtWidgets.QMainWindow):
             btn.setFixedSize(BOTTOM_NUMBER_SIZE, BOTTOM_NUMBER_SIZE)
             btn.clicked.connect(lambda _, a=i: self.bottom_button_clicked(a + 1))
             self.my_layout.addWidget(btn)
-            btn.setStyleSheet("""
-                QPushButton {
-                background-color: #007bff;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 5px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background-color: #0069d9;
-            }
-            """)
+            btn.setStyleSheet(NORMAL_BUTTON_STYLE)
             self.bottom_numbers[i] = btn
         self.my_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.the_widget = QWidget(self)
@@ -176,26 +218,6 @@ class MyWindows(QtWidgets.QMainWindow):
     def init_board(self):
         layout = QGridLayout()
         self.buttons = [[None] * 9 for _ in range(9)]
-        # for i in range(9):
-        #     for j in range(9):
-        #         button = QPushButton('1')
-        #         button.setFixedSize(INIT_SIZE_TILE, INIT_SIZE_TILE)  # Set the fixed size of the button
-        #         self.buttons[i][j] = button
-        #         layout.addWidget(button, i, j)
-        #         button.clicked.connect(lambda _, a=i, b=j: self.click_button(a, b))
-        #         button.setStyleSheet(
-        #             'QPushButton {'
-        #             '    background-color: #E0E0E0;'
-        #             '    border: 1px solid #909090;'
-        #             '    border-radius: 3px;'
-        #             '    color: #404041;'
-        #             '}'
-        #             'text-align: center;'
-        #             'QPushButton:hover {'
-        #             '    background-color: #C0C0C0;'
-        #             '}'
-        #         )
-
         for i in range(3):
             for j in range(3):
                 mimi_container = QGridLayout()
@@ -205,19 +227,7 @@ class MyWindows(QtWidgets.QMainWindow):
                         button = QPushButton('1')
                         button.setFixedSize(INIT_SIZE_TILE, INIT_SIZE_TILE)  # Set the fixed size of the button
                         button.clicked.connect(lambda _, a=i * 3 + k, b=3 * j + z: self.click_button(a, b))
-                        button.setStyleSheet(
-                            'QPushButton {'
-                            '    background-color: #E0E0E0;'
-                            '    border: 1px solid #909090;'
-                            '    border-radius: 3px;'
-                            '    color: #404041;'
-                            '   padding: 0px'
-                            '}'
-                            'text-align: center;'
-                            'QPushButton:hover {'
-                            '    background-color: #C0C0C0;'
-                            '}'
-                        )
+                        button.setStyleSheet(NORMAL_BUTTON_STYLE)
                         self.buttons[i * 3 + k][3 * j + z] = button
                         mimi_container.addWidget(button, k, z)
                 mini_widget.setLayout(mimi_container)
@@ -240,10 +250,30 @@ class MyWindows(QtWidgets.QMainWindow):
                     self.buttons[i][j].setText('')
 
     def click_button(self, a: int, b: int):
-        print(f'click {a} {b}')
+        for i in range(NUMBER):
+            for j in range(NUMBER):
+                self.buttons[i][j].setStyleSheet(NORMAL_BUTTON_STYLE)
         if self.game.first_having_number[a][b] == 0:
             # self.show_number_buttons()
-            print("test")
+            for i in range(NUMBER):
+                self.buttons[i][b].setStyleSheet(HIGHLIGHT_BUTTON_STYLE)
+                self.buttons[a][i].setStyleSheet(HIGHLIGHT_BUTTON_STYLE)
+            starting_a = (a // 3) * 3
+            starting_b = (b // 3) * 3
+            for i in range(starting_b, starting_b + 3, 1):
+                for j in range(starting_a, starting_a + 3, 1):
+                    self.buttons[j][i].setStyleSheet(HIGHLIGHT_BUTTON_STYLE)
+            self.buttons[a][b].setStyleSheet(SELECTED_BUTTON_STYLE)
+            self.selected_x = a
+            self.selected_y = b
+
+    def about_clicked(self):
+        alert = QMessageBox()
+        alert.setWindowTitle("about")
+        alert.setText("this is a sudoku game for more information go https://github.com/motrnam/PyQt6Sodoko")
+        alert.setIcon(QMessageBox.Icon.Information)
+        alert.setStandardButtons(QMessageBox.StandardButton.Ok)
+        alert.exec()
 
     def my_save(self):
         print("save")
@@ -286,6 +316,15 @@ class MyWindows(QtWidgets.QMainWindow):
 
         except:
             raise Exception('Error in loading file')  # to do instead of this make random table
+
+    def check_game_complete(self):
+        if self.game.check_complete() and self.game.is_solve():
+            alert = QMessageBox()
+            alert.setWindowTitle("Congratulations")
+            alert.setText("you solved the sudoku")
+            alert.setIcon(QMessageBox.Icon.Information)
+            alert.setStandardButtons(QMessageBox.StandardButton.Ok)
+            alert.exec()
 
 
 if __name__ == '__main__':
