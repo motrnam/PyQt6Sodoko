@@ -50,6 +50,18 @@ SELECTED_BUTTON_STYLE = """
                 background-color: #ffcc00;
             }
             """
+FILL_BUTTON_STYLE = """
+        QPushButton {
+                background-color: #aaaaaa;
+                color: black;
+                padding: 10px 20px;
+                border: 1px solid black;
+                text-align: center;
+            }
+            QPushButton:hover { 
+                background-color: #ffcc00;
+            }
+            """
 difficulties = {
     'easy': (35, 0),
     'medium': (81, 5),
@@ -68,6 +80,7 @@ class Game:
         self.time = 0
         self.solved = self.gen.board.copy()  # a copy of table (solved)
         self.gen.reduce_via_logical(self.difficulty[0])
+        self.has_problem = False
         if self.difficulty[1] != 0:
             self.gen.reduce_via_logical(self.difficulty[1])
         self.final_table = self.gen.board.copy()
@@ -78,19 +91,25 @@ class Game:
                     self.first_having_number[i][j] = 1
 
     def is_solve(self) -> bool:
+        if self.has_problem:
+            return False
         for i in range(self.size_of_table):
             for j in range(self.size_of_table):
-                if self.final_table.rows[i][j] != self.solved[i][j]:
+                if self.final_table.rows[i][j] != self.solved.rows[i][j]:
                     return False
         return True
 
     def add_number(self, a: int, b: int, number: int):
-        if self.final_table.rows[a][b] == 0 and self.solved[a][b] == number:
-            self.final_table.rows[a][b] = number
-            return 0
-        if self.final_table.rows[a][b] == 0:
+        if self.first_having_number[a][b] == 1:
+            return 2
+        if self.final_table.rows[a][b].value == 0 and self.solved.rows[a][b].value == number:
+            self.final_table.rows[a][b].value = number
+            return 0  # valid move
+        if self.final_table.rows[a][b].value == 0:
+            self.final_table.rows[a][b].value = number
             if self.check_possible(a, b, number):
-                return 1
+                self.has_problem = True
+                return 1  # valid move at the moment
         return 2
 
     def check_possible(self, a: int, b: int, number: int) -> bool:
@@ -113,6 +132,10 @@ class Game:
                     return False
         return True
 
+    def __str__(self):
+        return f"Game: {self.level}, Time: {self.time}"
+
+
 
 class MyWindows(QtWidgets.QMainWindow):
     def __init__(self):
@@ -127,8 +150,18 @@ class MyWindows(QtWidgets.QMainWindow):
         self.init_game()
         self.add_number_buttons()
         self.show()
+        self.table_map = np.zeros((NUMBER, NUMBER), dtype='int32')
+        for i in range(NUMBER):
+            for j in range(NUMBER):
+                if self.game.final_table.rows[i][j].value != 0:
+                    self.table_map[i][j] = 0
+                else:
+                    self.table_map[i][j] = 1
+        print(self.game.final_table)
         self.selected_x = -1
         self.selected_y = -1
+        self.haveSelected = False
+        self.hasProblem = False
 
     def init_topBar(self):
         self.timer_label = QLabel('Timer: 0', self)
@@ -166,6 +199,7 @@ class MyWindows(QtWidgets.QMainWindow):
         self.new_game_menu.addAction(extreme)
         self.about.addAction(about)
 
+
     def add_timer(self):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_timer)
@@ -179,8 +213,19 @@ class MyWindows(QtWidgets.QMainWindow):
 
     def new_game(self, level: str):
         self.game = Game(level)
+        self.table_map = np.zeros((NUMBER, NUMBER), dtype='int32')
+        for i in range(NUMBER):
+            for j in range(NUMBER):
+                if self.game.final_table.rows[i][j] != -1:
+                    self.table_map[i][j] = 0
+                else:
+                    self.table_map[i][j] = -1
         self.change_board()
-        # self.initUI()
+        self.hasProblem = False
+        self.selected_x = -1
+        self.selected_y = -1
+        self.haveSelected = False
+
 
     def initUI(self):
         # self.add_timer()
@@ -189,9 +234,18 @@ class MyWindows(QtWidgets.QMainWindow):
     def init_game(self):
         my_file = Path("save.txt")
         if my_file.exists() and my_file.is_file():
-            self.my_load()
+            msg = QMessageBox()
+            msg.setWindowTitle("Load game")
+            msg.setText("Do you want to load the previous game?")
+            msg.setIcon(QMessageBox.Icon.Question)
+            msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            result = msg.exec()
+            if result == QMessageBox.StandardButton.Yes:
+                self.my_load()
+            else:
+                self.game = Game('medium')
         else:
-            self.game = Game('easy')
+            self.game = Game('medium')
         self.change_board()
 
     def add_number_buttons(self):
@@ -213,7 +267,25 @@ class MyWindows(QtWidgets.QMainWindow):
         self.the_widget.show()
 
     def bottom_button_clicked(self, number: int):
-        print(number)
+        if not self.haveSelected:
+            return
+        if self.haveSelected:
+            result = self.game.add_number(self.selected_x, self.selected_y, number)
+            if result == 0:
+                self.buttons[self.selected_x][self.selected_y].setText(str(number))
+                self.check_game_complete()
+            elif result == 1:
+                self.buttons[self.selected_x][self.selected_y].setText(str(number))
+                self.hasProblem = True
+                self.check_game_complete()
+            else:
+                alert = QMessageBox()
+                alert.setWindowTitle("Invalid move")
+                alert.setText("Invalid move")
+                alert.setIcon(QMessageBox.Icon.Warning)
+                alert.setStandardButtons(QMessageBox.StandardButton.Ok)
+                alert.exec()
+            self.haveSelected = False
 
     def init_board(self):
         layout = QGridLayout()
@@ -246,13 +318,19 @@ class MyWindows(QtWidgets.QMainWindow):
             for j in range(NUMBER):
                 if str(self.game.final_table.rows[i][j])[7] != '0':
                     self.buttons[i][j].setText(str(self.game.final_table.rows[i][j])[7])
+                    self.buttons[i][j].setStyleSheet(FILL_BUTTON_STYLE)
                 else:
                     self.buttons[i][j].setText('')
+                    self.buttons[i][j].setStyleSheet(NORMAL_BUTTON_STYLE)
 
     def click_button(self, a: int, b: int):
+        self.haveSelected = False
         for i in range(NUMBER):
             for j in range(NUMBER):
-                self.buttons[i][j].setStyleSheet(NORMAL_BUTTON_STYLE)
+                if self.table_map[i][j] == 1:
+                    self.buttons[i][j].setStyleSheet(NORMAL_BUTTON_STYLE)
+                else:
+                    self.buttons[i][j].setStyleSheet(FILL_BUTTON_STYLE)
         if self.game.first_having_number[a][b] == 0:
             # self.show_number_buttons()
             for i in range(NUMBER):
@@ -266,6 +344,7 @@ class MyWindows(QtWidgets.QMainWindow):
             self.buttons[a][b].setStyleSheet(SELECTED_BUTTON_STYLE)
             self.selected_x = a
             self.selected_y = b
+            self.haveSelected = True
 
     def about_clicked(self):
         alert = QMessageBox()
@@ -294,6 +373,12 @@ class MyWindows(QtWidgets.QMainWindow):
         result += self.game.level
         result += '\n'
         result += solved
+        result += '\n'
+        temp_string = ""
+        for i in range(NUMBER):
+            for j in range(NUMBER):
+                temp_string += str(self.table_map[i][j])
+            temp_string += '\n'
         with open("save.txt", "w") as f:
             f.write(result)
 
@@ -313,9 +398,15 @@ class MyWindows(QtWidgets.QMainWindow):
                     self.game.final_table.rows[i][j].value = int(table[i * NUMBER + j])
                     self.game.first_having_number[i][j] = int(initial_zero[i * NUMBER + j])
                     self.game.solved.rows[i][j].value = int(solved[i * NUMBER + j])
-
+            self.table_map = np.zeros((NUMBER, NUMBER), dtype='int32')
+            for i in range(NUMBER):
+                for j in range(NUMBER):
+                    if self.game.final_table.rows[i][j].value != 0:
+                        self.table_map[i][j] = 0
+                    else:
+                        self.table_map[i][j] = 1
         except:
-            raise Exception('Error in loading file')  # to do instead of this make random table
+            raise Exception('Error in loading file')  # TODO instead of this make random table
 
     def check_game_complete(self):
         if self.game.check_complete() and self.game.is_solve():
