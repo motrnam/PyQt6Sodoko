@@ -1,13 +1,15 @@
+import pickle
 import sys
+from pathlib import Path
 
 import numpy as np
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QFont, QAction, QCursor
+from PyQt6.QtGui import QFont, QAction
 from PyQt6.QtWidgets import QApplication, QLabel, QPushButton, QWidget, \
-    QGridLayout, QVBoxLayout, QToolTip, QHBoxLayout, QMessageBox
-from pathlib import Path
-from Generator import Generator
+    QGridLayout, QHBoxLayout, QMessageBox
+
+from Game import Game
 
 INIT_SIZE_TILE = 60
 NUMBER = 9
@@ -20,6 +22,7 @@ NORMAL_BUTTON_STYLE = """
                 padding: 10px 10px;
                 border: 1px solid black;
                 text-align: center;
+                expand: 1;
             }
             QPushButton:hover {
                 background-color: #0069d9;
@@ -62,6 +65,8 @@ FILL_BUTTON_STYLE = """
                 background-color: #ffcc00;
             }
             """
+
+
 difficulties = {
     'easy': (35, 0),
     'medium': (81, 5),
@@ -70,71 +75,29 @@ difficulties = {
 }
 
 
-class Game:
-    def __init__(self, level: str):
-        self.level = level
-        self.difficulty = difficulties[level]
-        self.gen = Generator("../base.txt")
-        self.gen.randomize(100)
-        self.size_of_table = 9
-        self.time = 0
-        self.solved = self.gen.board.copy()  # a copy of table (solved)
-        self.gen.reduce_via_logical(self.difficulty[0])
-        self.has_problem = False
-        if self.difficulty[1] != 0:
-            self.gen.reduce_via_logical(self.difficulty[1])
-        self.final_table = self.gen.board.copy()
-        self.first_having_number = np.zeros((self.size_of_table, self.size_of_table), dtype='int32')
-        for i in range(self.size_of_table):
-            for j in range(self.size_of_table):
-                if self.final_table.rows[i][j].value != 0:
-                    self.first_having_number[i][j] = 1
+class GameFrame(QtWidgets.QWidget):
+    def __init__(self, level: str = None, game: Game = None):
+        super().__init__()
+        if level is not None:
+            self.game = Game(level)
+        elif game is not None:
+            self.game = game
+        else:
+            self.game = Game('medium')  # default level
 
-    def is_solve(self) -> bool:
-        if self.has_problem:
-            return False
-        for i in range(self.size_of_table):
-            for j in range(self.size_of_table):
-                if self.final_table.rows[i][j] != self.solved.rows[i][j]:
-                    return False
-        return True
+        self.table_grid_box = QGridLayout(self)
+        self.table_grid_box.setSpacing(0)
+        self.buttons = [[None] * 9 for _ in range(9)]
 
-    def add_number(self, a: int, b: int, number: int):
-        if self.first_having_number[a][b] == 1:
-            return 2
-        if self.final_table.rows[a][b].value == 0 and self.solved.rows[a][b].value == number:
-            self.final_table.rows[a][b].value = number
-            return 0  # valid move
-        if self.final_table.rows[a][b].value == 0:
-            self.final_table.rows[a][b].value = number
-            if self.check_possible(a, b, number):
-                self.has_problem = True
-                return 1  # valid move at the moment
-        return 2
+        for i in range(9):
+            for j in range(9):
+                button = QPushButton(str(self.game.final_table.rows[i][j])[7])
+                button.setStyleSheet(NORMAL_BUTTON_STYLE)
+                self.buttons[i][j] = button
+                self.table_grid_box.addWidget(button, i, j)
 
-    def check_possible(self, a: int, b: int, number: int) -> bool:
-        for i in range(self.size_of_table):
-            if (self.final_table.rows[i][b] == self.final_table.rows[a][b] or self.final_table.rows[a][i] ==
-                    self.final_table.rows[a][b]):
-                return False
-        starting_a = (a // 3) * 3
-        starting_b = (b // 3) * 3
-        for i in range(starting_b, starting_b + 3, 1):
-            for j in range(starting_a, starting_a + 3, 1):
-                if self.final_table[i][j] == number:
-                    return False
-        return True
-
-    def check_complete(self):
-        for i in range(self.size_of_table):
-            for j in range(self.size_of_table):
-                if self.final_table.rows[i][j] == 0:
-                    return False
-        return True
-
-    def __str__(self):
-        return f"Game: {self.level}, Time: {self.time}"
-
+        self.setLayout(self.table_grid_box)
+        self.show()
 
 
 class MyWindows(QtWidgets.QMainWindow):
@@ -145,7 +108,6 @@ class MyWindows(QtWidgets.QMainWindow):
         self.setWindowTitle("Sudoku")
         self.setMinimumSize(FIRST_WINDOW_SIZE, FIRST_WINDOW_SIZE)
         self.init_topBar()
-        self.initUI()
         self.init_board()
         self.init_game()
         self.add_number_buttons()
@@ -199,18 +161,6 @@ class MyWindows(QtWidgets.QMainWindow):
         self.new_game_menu.addAction(extreme)
         self.about.addAction(about)
 
-
-    def add_timer(self):
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_timer)
-        self.timer.start(1000)
-
-    def update_timer(self):
-        # Update the timer label every second
-        current_time = int(self.timer_label.text().split(':')[-1])
-        current_time += 1
-        self.timer_label.setText(f'Timer: {current_time}')
-
     def new_game(self, level: str):
         self.game = Game(level)
         self.table_map = np.zeros((NUMBER, NUMBER), dtype='int32')
@@ -226,13 +176,8 @@ class MyWindows(QtWidgets.QMainWindow):
         self.selected_y = -1
         self.haveSelected = False
 
-
-    def initUI(self):
-        # self.add_timer()
-        ...
-
     def init_game(self):
-        my_file = Path("save.txt")
+        my_file = Path("Game.pickle")
         if my_file.exists() and my_file.is_file():
             msg = QMessageBox()
             msg.setWindowTitle("Load game")
@@ -318,9 +263,11 @@ class MyWindows(QtWidgets.QMainWindow):
             for j in range(NUMBER):
                 if str(self.game.final_table.rows[i][j])[7] != '0':
                     self.buttons[i][j].setText(str(self.game.final_table.rows[i][j])[7])
-                    self.buttons[i][j].setStyleSheet(FILL_BUTTON_STYLE)
                 else:
                     self.buttons[i][j].setText('')
+                if self.game.first_having_number[i][j] == 1:
+                    self.buttons[i][j].setStyleSheet(FILL_BUTTON_STYLE)
+                else:
                     self.buttons[i][j].setStyleSheet(NORMAL_BUTTON_STYLE)
 
     def click_button(self, a: int, b: int):
@@ -356,55 +303,14 @@ class MyWindows(QtWidgets.QMainWindow):
 
     def my_save(self):
         print("save")
-        table = self.game.final_table
-        result = ""
-        temp = ""
-        solved = ""
-        for i in range(9):
-            for j in range(9):
-                result += str((table.rows[i][j].value))
-                temp += str(self.game.first_having_number[i][j])
-                solved += str(self.game.solved.rows[i][j].value)
-        result += '\n'
-        result += temp
-        result += '\n'
-        result += str(self.game.time)
-        result += '\n'
-        result += self.game.level
-        result += '\n'
-        result += solved
-        result += '\n'
-        temp_string = ""
-        for i in range(NUMBER):
-            for j in range(NUMBER):
-                temp_string += str(self.table_map[i][j])
-            temp_string += '\n'
-        with open("save.txt", "w") as f:
-            f.write(result)
+        with open("Game.pickle", "wb") as file:
+            pickle.dump(self.game, file)
 
     def my_load(self):  # not tested
         try:
-            with open("save.txt", "r") as f:
-                table = f.readline().strip('\n')
-                initial_zero = f.readline().strip('\n')
-                time = f.readline().strip('\n')
-                level = f.readline().strip('\n')
-                solved = f.readline().strip('\n')
-            self.game = Game(level.strip('\n'))
-            self.game.time = int(time)
-            self.game.first_having_number = np.zeros((NUMBER, NUMBER), dtype='int32')
-            for i in range(NUMBER):
-                for j in range(NUMBER):
-                    self.game.final_table.rows[i][j].value = int(table[i * NUMBER + j])
-                    self.game.first_having_number[i][j] = int(initial_zero[i * NUMBER + j])
-                    self.game.solved.rows[i][j].value = int(solved[i * NUMBER + j])
-            self.table_map = np.zeros((NUMBER, NUMBER), dtype='int32')
-            for i in range(NUMBER):
-                for j in range(NUMBER):
-                    if self.game.final_table.rows[i][j].value != 0:
-                        self.table_map[i][j] = 0
-                    else:
-                        self.table_map[i][j] = 1
+            with open("Game.pickle", "rb") as file:
+                self.game = pickle.load(file)
+                self.change_board()
         except:
             raise Exception('Error in loading file')  # TODO instead of this make random table
 
@@ -420,5 +326,5 @@ class MyWindows(QtWidgets.QMainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    win = MyWindows()
+    win = GameFrame()
     app.exec()
