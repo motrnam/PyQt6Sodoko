@@ -1,5 +1,5 @@
-import numpy as np
-from Sudoku.Generator import Generator
+from .Generator import Generator
+from .Cell import FILLING_STATE
 
 difficulties = {
     'easy': (35, 0),
@@ -13,6 +13,7 @@ class Game:
     def __init__(self, level: str):
         self.level = level
         self.difficulty = difficulties[level]
+        self.final_table = None
         self.gen = Generator("../base.txt")
         self.gen.randomize(100)
         self.size_of_table = 9
@@ -23,11 +24,10 @@ class Game:
         if self.difficulty[1] != 0:
             self.gen.reduce_via_logical(self.difficulty[1])
         self.final_table = self.gen.board.copy()
-        self.first_having_number = np.zeros((self.size_of_table, self.size_of_table), dtype='int32')
         for i in range(self.size_of_table):
             for j in range(self.size_of_table):
                 if self.final_table.rows[i][j].value != 0:
-                    self.first_having_number[i][j] = 1
+                    self.final_table.rows[i][j].state = FILLING_STATE.FILLED_BY_GAME
 
     def is_solve(self) -> bool:
         if self.has_problem:
@@ -39,17 +39,11 @@ class Game:
         return True
 
     def add_number(self, a: int, b: int, number: int):
-        if self.first_having_number[a][b] == 1:
-            raise Exception("You can't change the initial numbers")
-        if self.final_table.rows[a][b].value == 0 and self.solved.rows[a][b].value == number:
+        if self.final_table.rows[a][b].state == FILLING_STATE.FILLED_BY_GAME:
+            raise Exception("This cell is filled by game")
+        if self.check_possible(a, b, number):
             self.final_table.rows[a][b].value = number
-            return 0  # valid move
-        if self.final_table.rows[a][b].value == 0:
-            self.final_table.rows[a][b].value = number
-            if self.check_possible(a, b, number):
-                self.has_problem = True
-                return 1  # valid move at the moment
-        return 2
+            self.final_table.rows[a][b].state = FILLING_STATE.FILLED_BY_USER
 
     def check_possible(self, a: int, b: int, number: int) -> bool:
         for i in range(self.size_of_table):
@@ -76,3 +70,6 @@ class Game:
 
     def get_final_table(self):
         return self.final_table
+
+    def get_cell(self, a: int, b: int):
+        return self.final_table.rows[a][b].value, self.final_table.rows[a][b].state

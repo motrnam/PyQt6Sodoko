@@ -1,8 +1,8 @@
 import random
 from functools import reduce
 
-from Board import *
-from Solver import *
+from .Board import *
+from .Solver import *
 
 
 class Generator:
